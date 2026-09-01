@@ -1,0 +1,2 @@
+rootProject.name = "notif-unlock-module"
+include ':app'

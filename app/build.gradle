@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.example.forcenotifyunlock'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.example.forcenotifyunlock"
+        minSdk 28
+        targetSdk 36
+        versionCode 1
+        versionName "1.0"
+    }
+
+    // Release signing comes from environment variables so no keystore or
+    // password ever needs to be committed. CI (see .github/workflows/
+    // build-release.yml) decodes the RELEASE_KEYSTORE secret to a file and
+    // sets RELEASE_KEYSTORE_PATH before invoking Gradle. A local build
+    // without these set just produces an unsigned release APK.
+    def releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+    if (releaseKeystorePath) {
+        signingConfigs {
+            release {
+                storeFile file(releaseKeystorePath)
+                storePassword System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (releaseKeystorePath) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+dependencies {
+    compileOnly 'de.robv.android.xposed:api:82'
+}
