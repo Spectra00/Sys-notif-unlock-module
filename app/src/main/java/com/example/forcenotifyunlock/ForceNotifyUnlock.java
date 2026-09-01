@@ -33,6 +33,14 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
             }
         };
 
+        XC_MethodHook logSetEnabledArg = new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                XposedBridge.log("ForceNotifyUnlock: setEnabled CALLED with arg=" + param.args[0]
+                    + " (not overriding, just logging)");
+            }
+        };
+
         try {
             findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
                 "isChannelBlockable", boolean.class, NotificationChannel.class, forceTrueResult);
@@ -75,8 +83,8 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
 
         try {
             findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
-                "setEnabled", boolean.class, forceTrueArg);
-            XposedBridge.log("ForceNotifyUnlock: hooked setEnabled");
+                "setEnabled", boolean.class, logSetEnabledArg);
+            XposedBridge.log("ForceNotifyUnlock: hooked setEnabled (diagnostic, not forcing)");
         } catch (Throwable t) {
             XposedBridge.log("ForceNotifyUnlock: setEnabled hook failed: " + t);
         }
