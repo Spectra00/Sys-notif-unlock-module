@@ -26,21 +26,7 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
             }
         };
 
-        XC_MethodHook forceTrueArg = new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) {
-                param.args[0] = true;
-            }
-        };
-
-        XC_MethodHook logSetEnabledArg = new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) {
-                XposedBridge.log("ForceNotifyUnlock: setEnabled CALLED with arg=" + param.args[0]
-                    + " (not overriding, just logging)");
-            }
-        };
-
+        // --- keep forcing these three: confirmed fix for the original grey-out issue ---
         try {
             findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
                 "isChannelBlockable", boolean.class, NotificationChannel.class, forceTrueResult);
@@ -65,31 +51,128 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
             XposedBridge.log("ForceNotifyUnlock: notDisabledByLocalConfig hook failed: " + t);
         }
 
+        // --- downgraded to diagnostic-only: no longer forcing these, just logging ---
         try {
             findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
-                "channelEnabled", NotificationChannel.class, boolean.class, forceTrueResult);
-            XposedBridge.log("ForceNotifyUnlock: hooked channelEnabled");
+                "channelEnabled", NotificationChannel.class, boolean.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        NotificationChannel ch = (NotificationChannel) param.args[0];
+                        XposedBridge.log("ForceNotifyUnlock: channelEnabled CALLED channelId="
+                            + (ch != null ? ch.getId() : "null") + " arg1=" + param.args[1]);
+                    }
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        XposedBridge.log("ForceNotifyUnlock: channelEnabled RETURNED " + param.getResult());
+                    }
+                });
+            XposedBridge.log("ForceNotifyUnlock: hooked channelEnabled (diagnostic, not forcing)");
         } catch (Throwable t) {
             XposedBridge.log("ForceNotifyUnlock: channelEnabled hook failed: " + t);
         }
 
         try {
             findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
-                "appEnabled", String.class, int.class, boolean.class, forceTrueResult);
-            XposedBridge.log("ForceNotifyUnlock: hooked appEnabled");
+                "appEnabled", String.class, int.class, boolean.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        XposedBridge.log("ForceNotifyUnlock: appEnabled CALLED pkg=" + param.args[0]
+                            + " uid=" + param.args[1] + " arg2=" + param.args[2]);
+                    }
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        XposedBridge.log("ForceNotifyUnlock: appEnabled RETURNED " + param.getResult());
+                    }
+                });
+            XposedBridge.log("ForceNotifyUnlock: hooked appEnabled (diagnostic, not forcing)");
         } catch (Throwable t) {
             XposedBridge.log("ForceNotifyUnlock: appEnabled hook failed: " + t);
         }
 
         try {
             findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
-                "setEnabled", boolean.class, logSetEnabledArg);
+                "setEnabled", boolean.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        XposedBridge.log("ForceNotifyUnlock: setEnabled CALLED with arg=" + param.args[0]);
+                    }
+                });
             XposedBridge.log("ForceNotifyUnlock: hooked setEnabled (diagnostic, not forcing)");
         } catch (Throwable t) {
             XposedBridge.log("ForceNotifyUnlock: setEnabled hook failed: " + t);
         }
 
-        // --- diagnostic only: log what the boot-time channel reconciliation does ---
+        // --- new: the actual checked-state and persistence methods ---
+        try {
+            findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
+                "setChecked", boolean.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        XposedBridge.log("ForceNotifyUnlock: setChecked CALLED with arg=" + param.args[0]);
+                    }
+                });
+            XposedBridge.log("ForceNotifyUnlock: hooked setChecked (diagnostic)");
+        } catch (Throwable t) {
+            XposedBridge.log("ForceNotifyUnlock: setChecked hook failed: " + t);
+        }
+
+        try {
+            findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
+                "isChecked",
+                new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        XposedBridge.log("ForceNotifyUnlock: isChecked RETURNED " + param.getResult());
+                    }
+                });
+            XposedBridge.log("ForceNotifyUnlock: hooked isChecked (diagnostic)");
+        } catch (Throwable t) {
+            XposedBridge.log("ForceNotifyUnlock: isChecked hook failed: " + t);
+        }
+
+        XC_MethodHook logSaveUserRecord = new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                StringBuilder sb = new StringBuilder("ForceNotifyUnlock: saveUserRecordAndReportData(");
+                for (int i = 0; i < param.args.length; i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append(param.args[i]);
+                }
+                sb.append(") CALLED");
+                XposedBridge.log(sb.toString());
+            }
+        };
+
+        try {
+            findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
+                "saveUserRecordAndReportData", boolean.class, logSaveUserRecord);
+            XposedBridge.log("ForceNotifyUnlock: hooked saveUserRecordAndReportData(Z)");
+        } catch (Throwable t) {
+            XposedBridge.log("ForceNotifyUnlock: saveUserRecordAndReportData(Z) hook failed: " + t);
+        }
+
+        try {
+            findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
+                "saveUserRecordAndReportData", boolean.class, String.class, logSaveUserRecord);
+            XposedBridge.log("ForceNotifyUnlock: hooked saveUserRecordAndReportData(Z,String)");
+        } catch (Throwable t) {
+            XposedBridge.log("ForceNotifyUnlock: saveUserRecordAndReportData(Z,String) hook failed: " + t);
+        }
+
+        try {
+            findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
+                "saveUserRecordAndReportData", String.class, String.class, int.class, String.class, boolean.class,
+                logSaveUserRecord);
+            XposedBridge.log("ForceNotifyUnlock: hooked saveUserRecordAndReportData(full)");
+        } catch (Throwable t) {
+            XposedBridge.log("ForceNotifyUnlock: saveUserRecordAndReportData(full) hook failed: " + t);
+        }
+
+        // --- diagnostic only: boot-time channel reconciliation ---
         try {
             findAndHookMethod(
                 CONFIG_LIST_CHANNEL_CLASS,
