@@ -12,6 +12,8 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
     private static final String TARGET_PKG = "com.oplus.notificationmanager";
     private static final String TARGET_CLASS =
         "com.oplus.notificationmanager.property.uicontroller.PropertyUIController";
+    private static final String CONFIG_LIST_CHANNEL_CLASS =
+        "com.oplus.notificationmanager.property.configlist.ConfigListChannel";
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) {
@@ -31,7 +33,6 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
             }
         };
 
-        // --- previously confirmed hooked successfully, keep them ---
         try {
             findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
                 "isChannelBlockable", boolean.class, NotificationChannel.class, forceTrueResult);
@@ -56,7 +57,6 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
             XposedBridge.log("ForceNotifyUnlock: notDisabledByLocalConfig hook failed: " + t);
         }
 
-        // --- new: the actual widget-state methods ---
         try {
             findAndHookMethod(TARGET_CLASS, lpparam.classLoader,
                 "channelEnabled", NotificationChannel.class, boolean.class, forceTrueResult);
@@ -79,6 +79,39 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
             XposedBridge.log("ForceNotifyUnlock: hooked setEnabled");
         } catch (Throwable t) {
             XposedBridge.log("ForceNotifyUnlock: setEnabled hook failed: " + t);
+        }
+
+        // --- diagnostic only: log what the boot-time channel reconciliation does ---
+        try {
+            findAndHookMethod(
+                CONFIG_LIST_CHANNEL_CLASS,
+                lpparam.classLoader,
+                "initChannel",
+                String.class, int.class,
+                "com.oplus.notificationmanager.property.model.PackageConfig",
+                "com.oplus.notificationmanager.property.model.PackageConfig",
+                "com.oplus.notificationmanager.property.model.ChannelConfig",
+                NotificationChannel.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        NotificationChannel ch = (NotificationChannel) param.args[5];
+                        XposedBridge.log("ForceNotifyUnlock: initChannel BEFORE pkg=" + param.args[0]
+                            + " channelId=" + (ch != null ? ch.getId() : "null")
+                            + " importance=" + (ch != null ? ch.getImportance() : "null"));
+                    }
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        NotificationChannel ch = (NotificationChannel) param.args[5];
+                        XposedBridge.log("ForceNotifyUnlock: initChannel AFTER pkg=" + param.args[0]
+                            + " channelId=" + (ch != null ? ch.getId() : "null")
+                            + " importance=" + (ch != null ? ch.getImportance() : "null"));
+                    }
+                }
+            );
+            XposedBridge.log("ForceNotifyUnlock: hooked initChannel (diagnostic)");
+        } catch (Throwable t) {
+            XposedBridge.log("ForceNotifyUnlock: initChannel hook failed: " + t);
         }
     }
 }
