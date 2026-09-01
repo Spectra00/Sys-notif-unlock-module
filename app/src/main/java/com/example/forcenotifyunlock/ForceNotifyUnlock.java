@@ -64,10 +64,11 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
                     }
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
-                        XposedBridge.log("ForceNotifyUnlock: channelEnabled RETURNED " + param.getResult());
+                        param.setResult(true);
+                        XposedBridge.log("ForceNotifyUnlock: channelEnabled FORCED true (was going to return something else)");
                     }
                 });
-            XposedBridge.log("ForceNotifyUnlock: hooked channelEnabled (diagnostic, not forcing)");
+            XposedBridge.log("ForceNotifyUnlock: hooked channelEnabled (forcing true, logging)");
         } catch (Throwable t) {
             XposedBridge.log("ForceNotifyUnlock: channelEnabled hook failed: " + t);
         }
@@ -83,10 +84,11 @@ public class ForceNotifyUnlock implements IXposedHookLoadPackage {
                     }
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
-                        XposedBridge.log("ForceNotifyUnlock: appEnabled RETURNED " + param.getResult());
+                        param.setResult(true);
+                        XposedBridge.log("ForceNotifyUnlock: appEnabled FORCED true (was going to return something else)");
                     }
                 });
-            XposedBridge.log("ForceNotifyUnlock: hooked appEnabled (diagnostic, not forcing)");
+            XposedBridge.log("ForceNotifyUnlock: hooked appEnabled (forcing true, logging)");
         } catch (Throwable t) {
             XposedBridge.log("ForceNotifyUnlock: appEnabled hook failed: " + t);
         }
