@@ -8,13 +8,39 @@ and can't be turned on or off.
 
 ## What it does
 
-It hooks a handful of boolean gate methods
+Turning a system app's notifications off in Settings used to "snap back" on. That isn't
+the settings screen: Android's notification service itself drops the change.
+
+- Apps whose `POST_NOTIFICATIONS` permission is **SYSTEM_FIXED** (phone, SIM, eSIM manager,
+  system updates, …) can't have the permission revoked, so the app-level switch is a no-op.
+- Every channel of such an app is flagged "importance locked by critical device function",
+  and `PreferencesHelper.updateNotificationChannel()` puts the old importance back.
+
+So the module hooks **system_server** (LSPosed scope: *System Framework*):
+
+| Hook | Effect |
+|---|---|
+| `NotificationChannel.isImportanceLockedByCriticalDeviceFunction()` → false, setter forced false | channel switches stick |
+| `PreferencesHelper.isImportanceLocked()` / `PermissionHelper.isPermissionFixed()` → false (except uid 1000) | app switch no longer locked |
+| before `PermissionHelper.setNotificationPermission(…, grant=false, …)` clear SYSTEM_FIXED | app-level "off" is accepted |
+| `PreferencesHelper.updateNotificationChannel()` (log only) | LSPosed log shows requested vs stored importance |
+
+In `com.oplus.notificationmanager` it keeps the v1 hooks that make the switches usable
 (`isChannelBlockable`, `isChannelConfigurable`, `notDisabledByLocalConfig`,
-`channelEnabled`, `appEnabled`, `setEnabled`) on the notification-settings
-UI controller and forces them to report "yes, this is toggleable" instead of
-the hardcoded "no" that blocks system-UID packages. It doesn't touch any
-system files, databases, or permissions — it's a pure runtime hook that only
-affects how that one settings screen renders itself.
+`channelEnabled`, `appEnabled`, `setEnabled`). v1 stopped there, so the switches moved but
+system_server could still put the old value back; that is the part v3 adds.
+
+"Android System" (uid 1000) is the one exception for the **app-level** switch: Android
+grants the system uid every permission, so blocking it at app level would block all system
+services at once. Its individual channels can all be turned off.
+
+## Install
+
+1. Install the APK (uninstall v1 first if it was signed with a different key).
+2. In LSPosed, enable the module with scope **System Framework** and **NotificationCenter**
+   (`com.oplus.notificationmanager`), then reboot.
+3. LSPosed › Logs should show `ForceNotifyUnlock: loaded in system_server` and `hooked …`
+   lines. When you change a channel you'll see `user update …` and `stored … importance`.
 
 ## Compatibility
 
@@ -33,7 +59,8 @@ exist there.
 
 ## If it doesn't work
 
-This module makes no persistent changes to your system — it's a live hook
-that only runs while enabled. If it doesn't unlock the toggles on your
+The hooks only run while the module is enabled. The one persistent effect: switching a
+system-fixed app's notifications off clears that permission's SYSTEM_FIXED flag (the same
+state a normal app has); switch it back on in Settings to restore notifications. If it doesn't unlock the toggles on your
 device, there's nothing to clean up: just disable it in LSPosed/Vector's
 module list (or uninstall the APK) and you're back to stock behavior.

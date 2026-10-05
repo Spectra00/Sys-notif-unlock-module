@@ -1,9 +1,10 @@
-name: Build signed release APK
+name: Build module APK
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
-    branches: [main]
+    branches: ['**']
     paths:
       - 'app/**'
       - 'build.gradle'
@@ -30,15 +31,24 @@ jobs:
       - name: Install required SDK platform
         run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" > /dev/null
 
+      # Signs with your release key when the RELEASE_KEYSTORE secrets exist (so the APK installs
+      # over earlier releases). Without them (e.g. a fork or PR build) it falls back to a
+      # throwaway debug key; that APK is fine for testing but needs the old one uninstalled.
       - name: Decode release keystore
+        id: keystore
         env:
           RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
         run: |
-          echo "$RELEASE_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          if [ -n "$RELEASE_KEYSTORE" ]; then
+            echo "$RELEASE_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "path=$RUNNER_TEMP/release.keystore" >> "$GITHUB_OUTPUT"
+          else
+            echo "No RELEASE_KEYSTORE secret; building with a debug key"
+          fi
 
-      - name: Build signed release APK
+      - name: Build release APK
         env:
-          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          RELEASE_KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
@@ -54,9 +64,9 @@ jobs:
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
           "${BUILD_TOOLS}apksigner" verify --print-certs "$APK"
 
-      - name: Upload signed APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ForceNotifyUnlock-release-signed
+          name: ForceNotifyUnlock-${{ github.sha }}
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
