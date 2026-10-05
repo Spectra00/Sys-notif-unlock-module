@@ -6,8 +6,9 @@
         android:allowBackup="false">
         <meta-data android:name="xposedmodule" android:value="true" />
         <meta-data android:name="xposeddescription"
-            android:value="Force-unlocks greyed-out notification channel toggles for com.oplus.notificationmanager" />
-        <meta-data android:name="xposedminversion" android:value="53" />
+            android:value="Lets every notification toggle stick, including system apps. Scope: System Framework + NotificationCenter. Reboot after enabling." />
+        <meta-data android:name="xposedminversion" android:value="93" />
+        <meta-data android:name="xposedscope" android:resource="@array/xposed_scope" />
     </application>
 
 </manifest>

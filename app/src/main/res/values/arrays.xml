@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Suggested LSPosed scope: System Framework does the real work. -->
+    <string-array name="xposed_scope">
+        <item>android</item>
+        <item>com.oplus.notificationmanager</item>
+    </string-array>
+</resources>

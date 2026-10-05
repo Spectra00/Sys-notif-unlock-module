@@ -12,10 +12,10 @@
 #   - a real D8 dexer jar, fetched from Google's public r8-releases GCS
 #     bucket (storage.googleapis.com, unaffiliated with the blocked
 #     dl.google.com/maven.google.com hosts)
-#   - a real android.jar with API 28 classes (NotificationChannel needs 26+),
+#   - a real android.jar with API 36 classes (the hooks reference Android 16 APIs),
 #     from org.robolectric:android-all on Maven Central, used only as the
 #     javac compile classpath (resource linking still uses the apt-installed
-#     API 23 platform jar, which is sufficient since this module has no res/)
+#     API 23 platform jar, which is sufficient for the module's single string-array)
 #
 # Output: build/offline/ForceNotifyUnlock-release-signed.apk
 set -euo pipefail
@@ -30,8 +30,8 @@ ZIPALIGN_BIN="${ZIPALIGN_BIN:-/usr/lib/android-sdk/build-tools/29.0.3/zipalign}"
 APKSIGNER_BIN="${APKSIGNER_BIN:-/usr/lib/android-sdk/build-tools/29.0.3/apksigner}"
 FRAMEWORK_JAR="${FRAMEWORK_JAR:-/usr/lib/android-sdk/platforms/android-23/android.jar}"
 
-ANDROID_ALL_URL="https://repo1.maven.org/maven2/org/robolectric/android-all/9-robolectric-4913185/android-all-9-robolectric-4913185.jar"
-ANDROID_ALL_JAR="$CACHE/android-all-9.jar"
+ANDROID_ALL_URL="https://repo1.maven.org/maven2/org/robolectric/android-all/16-robolectric-13921718/android-all-16-robolectric-13921718.jar"
+ANDROID_ALL_JAR="$CACHE/android-all-16.jar"
 R8_URL="https://storage.googleapis.com/r8-releases/raw/8.9.42/r8.jar"
 R8_JAR="$CACHE/r8.jar"
 
@@ -52,57 +52,38 @@ mkdir -p "$STUB_SRC/de/robv/android/xposed/callbacks"
 
 cat > "$STUB_SRC/de/robv/android/xposed/IXposedHookLoadPackage.java" << 'EOF'
 package de.robv.android.xposed;
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
-public interface IXposedHookLoadPackage {
-    void handleLoadPackage(LoadPackageParam lpparam) throws Throwable;
-}
+public interface IXposedHookLoadPackage { void handleLoadPackage(de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam p) throws Throwable; }
 EOF
 
 cat > "$STUB_SRC/de/robv/android/xposed/callbacks/XC_LoadPackage.java" << 'EOF'
 package de.robv.android.xposed.callbacks;
-public class XC_LoadPackage {
-    public static class LoadPackageParam {
-        public String packageName;
-        public ClassLoader classLoader;
-    }
-}
+public class XC_LoadPackage { public static class LoadPackageParam { public String packageName; public String processName; public ClassLoader classLoader; } }
 EOF
 
 cat > "$STUB_SRC/de/robv/android/xposed/XC_MethodHook.java" << 'EOF'
 package de.robv.android.xposed;
 public abstract class XC_MethodHook {
-    public static class Unhook {}
-    public static class MethodHookParam {
-        public Object thisObject;
-        public Object[] args;
-        private Object result;
-        private Throwable throwable;
-        public Object getResult() { return result; }
-        public void setResult(Object result) { this.result = result; }
-        public Throwable getThrowable() { return throwable; }
-        public void setThrowable(Throwable t) { this.throwable = t; }
-    }
-    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {}
-    protected void afterHookedMethod(MethodHookParam param) throws Throwable {}
-}
+  public class Unhook {}
+  public static class MethodHookParam { public java.lang.reflect.Member method; public Object thisObject; public Object[] args;
+    public Object getResult(){return null;} public void setResult(Object r){} public Throwable getThrowable(){return null;} }
+  protected void beforeHookedMethod(MethodHookParam p) throws Throwable {}
+  protected void afterHookedMethod(MethodHookParam p) throws Throwable {} }
 EOF
 
 cat > "$STUB_SRC/de/robv/android/xposed/XposedBridge.java" << 'EOF'
 package de.robv.android.xposed;
-public class XposedBridge {
-    public static void log(String text) {}
-    public static void log(Throwable t) {}
-}
+public final class XposedBridge { public static void log(String t){} public static java.util.Set<XC_MethodHook.Unhook> hookAllMethods(Class<?> c, String n, XC_MethodHook cb){return null;} }
 EOF
 
 cat > "$STUB_SRC/de/robv/android/xposed/XposedHelpers.java" << 'EOF'
 package de.robv.android.xposed;
-public class XposedHelpers {
-    public static XC_MethodHook.Unhook findAndHookMethod(String className, ClassLoader classLoader,
-            String methodName, Object... parameterTypesAndCallback) {
-        return new XC_MethodHook.Unhook();
-    }
-}
+public final class XposedHelpers {
+  public static XC_MethodHook.Unhook findAndHookMethod(String c, ClassLoader l, String m, Object... a){return null;}
+  public static XC_MethodHook.Unhook findAndHookMethod(Class<?> c, String m, Object... a){return null;}
+  public static Class<?> findClass(String c, ClassLoader l){return null;}
+  public static Object getObjectField(Object o, String f){return null;}
+  public static Object getStaticObjectField(Class<?> c, String f){return null;}
+  public static Object callMethod(Object o, String m, Object... a){return null;} }
 EOF
 
 STUB_CLASSES="$CACHE/stub-classes"
@@ -130,10 +111,11 @@ java -cp "$R8_JAR" com.android.tools.r8.D8 --output "$DEX_OUT" --min-api 28 \
 #     since there is no AGP manifest merger here to inject it from
 #     app/build.gradle's namespace) ---
 MANIFEST="$OUT/AndroidManifest.xml"
-sed 's#<manifest xmlns:android="http://schemas.android.com/apk/res/android">#<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.forcenotifyunlock" android:versionCode="1" android:versionName="1.0"><uses-sdk android:minSdkVersion="28" android:targetSdkVersion="36"/>#' \
+sed 's#<manifest xmlns:android="http://schemas.android.com/apk/res/android">#<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.forcenotifyunlock" android:versionCode="3" android:versionName="3.0"><uses-sdk android:minSdkVersion="28" android:targetSdkVersion="36"/>#' \
   "$ROOT/app/src/main/AndroidManifest.xml" > "$MANIFEST"
 
-"$AAPT2_BIN" link -o "$OUT/base.apk" -I "$FRAMEWORK_JAR" \
+"$AAPT2_BIN" compile --dir "$ROOT/app/src/main/res" -o "$OUT/res.zip"
+"$AAPT2_BIN" link -o "$OUT/base.apk" -I "$FRAMEWORK_JAR" "$OUT/res.zip" \
   --manifest "$MANIFEST" \
   -A "$ROOT/app/src/main/assets" \
   --min-sdk-version 28 --target-sdk-version 28
